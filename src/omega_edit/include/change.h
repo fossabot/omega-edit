@@ -1,17 +1,15 @@
 /**********************************************************************************************************************
  * Copyright (c) 2021 Concurrent Technologies Corporation.                                                            *
  *                                                                                                                    *
- * Licensed under the Apache License, Version 2.0 (the "License");                                                    *
- * you may not use this file except in compliance with the License.                                                   *
- * You may obtain a copy of the License at                                                                            *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance     *
+ * with the License.  You may obtain a copy of the License at                                                         *
  *                                                                                                                    *
  *     http://www.apache.org/licenses/LICENSE-2.0                                                                     *
  *                                                                                                                    *
- * Unless required by applicable law or agreed to in writing, software                                                *
- * distributed under the License is distributed on an "AS IS" BASIS,                                                  *
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                                           *
- * See the License for the specific language governing permissions and                                                *
- * limitations under the License.                                                                                     *
+ * Unless required by applicable law or agreed to in writing, software is distributed under the License is            *
+ * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or                   *
+ * implied.  See the License for the specific language governing permissions and limitations under the License.       *
+ *                                                                                                                    *
  **********************************************************************************************************************/
 
 #ifndef OMEGA_EDIT_CHANGE_H
@@ -57,10 +55,17 @@ char omega_change_get_kind_as_char(const omega_change_t *change_ptr);
 
 /**
  * Given a change, return a pointer to the byte data
- * @param change_ptr change to get the new bytes data from
+ * @param change_ptr change to get the bytes data from
  * @return pointer to the byte data
  */
 const omega_byte_t *omega_change_get_bytes(const omega_change_t *change_ptr);
+
+/**
+ * Given a change, determine if this change is undone
+ * @param change_ptr change to determine if it has been undone or not
+ * @return non-zero if the change is undone, and zero otherwise
+ */
+int omega_change_is_undone(const omega_change_t *change_ptr);
 
 #ifdef __cplusplus
 }

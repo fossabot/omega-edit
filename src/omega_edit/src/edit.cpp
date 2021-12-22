@@ -1,32 +1,29 @@
 /**********************************************************************************************************************
  * Copyright (c) 2021 Concurrent Technologies Corporation.                                                            *
  *                                                                                                                    *
- * Licensed under the Apache License, Version 2.0 (the "License");                                                    *
- * you may not use this file except in compliance with the License.                                                   *
- * You may obtain a copy of the License at                                                                            *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance     *
+ * with the License.  You may obtain a copy of the License at                                                         *
  *                                                                                                                    *
  *     http://www.apache.org/licenses/LICENSE-2.0                                                                     *
  *                                                                                                                    *
- * Unless required by applicable law or agreed to in writing, software                                                *
- * distributed under the License is distributed on an "AS IS" BASIS,                                                  *
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                                           *
- * See the License for the specific language governing permissions and                                                *
- * limitations under the License.                                                                                     *
+ * Unless required by applicable law or agreed to in writing, software is distributed under the License is            *
+ * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or                   *
+ * implied.  See the License for the specific language governing permissions and limitations under the License.       *
+ *                                                                                                                    *
  **********************************************************************************************************************/
 
 #include "../include/edit.h"
 #include "../include/change.h"
 #include "../include/session.h"
-#include "impl_/change_def.h"
-#include "impl_/internal_fun.h"
-#include "impl_/macros.h"
-#include "impl_/model_def.h"
-#include "impl_/model_segment_def.h"
-#include "impl_/search.h"
-#include "impl_/session_def.h"
-#include "impl_/viewport_def.h"
+#include "../include/viewport.h"
+#include "impl_/change_def.hpp"
+#include "impl_/internal_fun.hpp"
+#include "impl_/macros.hpp"
+#include "impl_/model_def.hpp"
+#include "impl_/model_segment_def.hpp"
+#include "impl_/session_def.hpp"
+#include "impl_/viewport_def.hpp"
 #include <cassert>
-#include <functional>
 #include <memory>
 
 static int64_t write_segment_to_file_(FILE *from_file_ptr, int64_t offset, int64_t byte_count, FILE *to_file_ptr) {
@@ -45,7 +42,7 @@ static int64_t write_segment_to_file_(FILE *from_file_ptr, int64_t offset, int64
     return byte_count - remaining;
 }
 
-static void initialize_model_segments_(model_segments_t &model_segments, int64_t length) {
+static void initialize_model_segments_(omega_model_segments_t &model_segments, int64_t length) {
     model_segments.clear();
     if (0 < length) {
         // Model begins with a single READ segment spanning the original file
@@ -54,7 +51,7 @@ static void initialize_model_segments_(model_segments_t &model_segments, int64_t
         change_ptr->kind = change_kind_t::CHANGE_INSERT;
         change_ptr->offset = 0;
         change_ptr->length = length;
-        auto read_segment_ptr = std::make_unique<model_segment_t>();
+        auto read_segment_ptr = std::make_unique<omega_model_segment_t>();
         read_segment_ptr->change_ptr = change_ptr;
         read_segment_ptr->computed_offset = 0;
         read_segment_ptr->change_offset = read_segment_ptr->change_ptr->offset;
@@ -84,9 +81,9 @@ static const_omega_change_ptr_t ins_(int64_t serial, int64_t offset, const omega
         memcpy(change_ptr->data.sm_bytes, bytes, change_ptr->length);
         change_ptr->data.sm_bytes[change_ptr->length] = '\0';
     } else {
-        change_ptr->data.bytes_ptr = std::make_unique<omega_byte_t[]>(change_ptr->length + 1);
-        memcpy(change_ptr->data.bytes_ptr.get(), bytes, change_ptr->length);
-        change_ptr->data.bytes_ptr.get()[change_ptr->length] = '\0';
+        change_ptr->data.bytes_ptr = new omega_byte_t[change_ptr->length + 1];
+        memcpy(change_ptr->data.bytes_ptr, bytes, change_ptr->length);
+        change_ptr->data.bytes_ptr[change_ptr->length] = '\0';
     }
     return change_ptr;
 }
@@ -102,9 +99,9 @@ static const_omega_change_ptr_t ovr_(int64_t serial, int64_t offset, const omega
         memcpy(change_ptr->data.sm_bytes, bytes, change_ptr->length);
         change_ptr->data.sm_bytes[change_ptr->length] = '\0';
     } else {
-        change_ptr->data.bytes_ptr = std::make_unique<omega_byte_t[]>(change_ptr->length + 1);
-        memcpy(change_ptr->data.bytes_ptr.get(), bytes, change_ptr->length);
-        change_ptr->data.bytes_ptr.get()[change_ptr->length] = '\0';
+        change_ptr->data.bytes_ptr = new omega_byte_t[change_ptr->length + 1];
+        memcpy(change_ptr->data.bytes_ptr, bytes, change_ptr->length);
+        change_ptr->data.bytes_ptr[change_ptr->length] = '\0';
     }
     return change_ptr;
 }
@@ -130,14 +127,14 @@ static int update_viewports_(omega_session_t *session_ptr, const omega_change_t 
         if (change_affects_viewport_(viewport_ptr.get(), change_ptr)) {
             viewport_ptr->data_segment.capacity =
                     -1 * std::abs(viewport_ptr->data_segment.capacity);// indicate dirty read
-            viewport_callback_(viewport_ptr.get(), change_ptr);
+            omega_viewport_execute_on_change(viewport_ptr.get(), change_ptr);
         }
     }
     return 0;
 }
 
-static model_segment_ptr_t clone_model_segment_(const model_segment_ptr_t &segment_ptr) {
-    auto result = std::make_unique<model_segment_t>();
+static omega_model_segment_ptr_t clone_model_segment_(const omega_model_segment_ptr_t &segment_ptr) {
+    auto result = std::make_unique<omega_model_segment_t>();
     result->computed_offset = segment_ptr->computed_offset;
     result->computed_length = segment_ptr->computed_length;
     result->change_offset = segment_ptr->change_offset;
@@ -156,7 +153,7 @@ static int update_model_helper_(omega_model_t *model_ptr, const_omega_change_ptr
 
     if (model_ptr->model_segments.empty() && change_ptr->kind != change_kind_t::CHANGE_DELETE) {
         // The model is empty, and we have a change with content
-        auto insert_segment_ptr = std::make_unique<model_segment_t>();
+        auto insert_segment_ptr = std::make_unique<omega_model_segment_t>();
         insert_segment_ptr->computed_offset = change_ptr->offset;
         insert_segment_ptr->computed_length = change_ptr->length;
         insert_segment_ptr->change_offset = 0;
@@ -216,7 +213,7 @@ static int update_model_helper_(omega_model_t *model_ptr, const_omega_change_ptr
                 }
                 case change_kind_t::CHANGE_OVERWRITE:// deliberate fall-through
                 case change_kind_t::CHANGE_INSERT: {
-                    auto insert_segment_ptr = std::make_unique<model_segment_t>();
+                    auto insert_segment_ptr = std::make_unique<omega_model_segment_t>();
                     insert_segment_ptr->computed_offset = change_ptr->offset;
                     insert_segment_ptr->computed_length = change_ptr->length;
                     insert_segment_ptr->change_offset = 0;
@@ -294,7 +291,7 @@ void omega_edit_destroy_session(omega_session_t *session_ptr) {
     while (!session_ptr->viewports_.empty()) { omega_edit_destroy_viewport(session_ptr->viewports_.back().get()); }
     for (auto &change_ptr : session_ptr->model_ptr_->changes) {
         if (change_ptr->kind != change_kind_t::CHANGE_DELETE && 7 < change_ptr->length) {
-            const_cast<omega_change_t *>(change_ptr.get())->data.bytes_ptr.reset();
+            delete[] const_cast<omega_change_t *>(change_ptr.get())->data.bytes_ptr;
         }
     }
     delete session_ptr;
@@ -308,27 +305,25 @@ omega_viewport_t *omega_edit_create_viewport(omega_session_t *session_ptr, int64
         viewport_ptr->data_segment.offset = offset;
         viewport_ptr->data_segment.capacity = -1 * capacity;// Negative capacity indicates dirty read
         viewport_ptr->data_segment.length = 0;
-        viewport_ptr->data_segment.data.bytes_ptr =
-                (7 < capacity) ? std::make_unique<omega_byte_t[]>(capacity) : nullptr;
+        viewport_ptr->data_segment.data.bytes_ptr = (7 < capacity) ? new omega_byte_t[capacity + 1] : nullptr;
         viewport_ptr->on_change_cbk = cbk;
         viewport_ptr->user_data_ptr = user_data_ptr;
         session_ptr->viewports_.push_back(viewport_ptr);
-        viewport_callback_(viewport_ptr.get(), nullptr);
+        omega_viewport_execute_on_change(viewport_ptr.get(), nullptr);
         return viewport_ptr.get();
     }
     return nullptr;
 }
 
-int omega_edit_destroy_viewport(omega_viewport_t *viewport_ptr) {
+void omega_edit_destroy_viewport(omega_viewport_t *viewport_ptr) {
     for (auto iter = viewport_ptr->session_ptr->viewports_.rbegin();
          iter != viewport_ptr->session_ptr->viewports_.rend(); ++iter) {
         if (viewport_ptr == iter->get()) {
-            if (7 < omega_viewport_get_capacity(iter->get())) { (*iter)->data_segment.data.bytes_ptr.reset(); }
+            if (7 < omega_viewport_get_capacity(iter->get())) { delete[](*iter)->data_segment.data.bytes_ptr; }
             viewport_ptr->session_ptr->viewports_.erase(std::next(iter).base());
-            return 0;
+            break;
         }
     }
-    return -1;
 }
 
 int64_t omega_edit_delete(omega_session_t *session_ptr, int64_t offset, int64_t length) {
@@ -336,7 +331,7 @@ int64_t omega_edit_delete(omega_session_t *session_ptr, int64_t offset, int64_t 
     return (0 < length && offset < computed_file_size)
                    ? update_(session_ptr, del_(1 + static_cast<int64_t>(omega_session_get_num_changes(session_ptr)),
                                                offset, std::min(length, computed_file_size - offset)))
-                   : -1;
+                   : 0;
 }
 
 int64_t omega_edit_insert_bytes(omega_session_t *session_ptr, int64_t offset, const omega_byte_t *bytes,
@@ -344,7 +339,11 @@ int64_t omega_edit_insert_bytes(omega_session_t *session_ptr, int64_t offset, co
     return (0 <= length && offset <= omega_session_get_computed_file_size(session_ptr))
                    ? update_(session_ptr, ins_(1 + static_cast<int64_t>(omega_session_get_num_changes(session_ptr)),
                                                offset, bytes, length))
-                   : -1;
+                   : 0;
+}
+
+int64_t omega_edit_insert(omega_session_t *session_ptr, int64_t offset, const char *cstr, int64_t length) {
+    return omega_edit_insert_bytes(session_ptr, offset, (const omega_byte_t *) cstr, length);
 }
 
 int64_t omega_edit_overwrite_bytes(omega_session_t *session_ptr, int64_t offset, const omega_byte_t *bytes,
@@ -352,7 +351,11 @@ int64_t omega_edit_overwrite_bytes(omega_session_t *session_ptr, int64_t offset,
     return (0 <= length && offset < omega_session_get_computed_file_size(session_ptr))
                    ? update_(session_ptr, ovr_(1 + static_cast<int64_t>(omega_session_get_num_changes(session_ptr)),
                                                offset, bytes, length))
-                   : -1;
+                   : 0;
+}
+
+int64_t omega_edit_overwrite(omega_session_t *session_ptr, int64_t offset, const char *cstr, int64_t length) {
+    return omega_edit_overwrite_bytes(session_ptr, offset, (const omega_byte_t *) cstr, length);
 }
 
 int omega_edit_save(const omega_session_t *session_ptr, const char *file_path) {
@@ -364,7 +367,7 @@ int omega_edit_save(const omega_session_t *session_ptr, const char *file_path) {
                 ABORT(CLOG << LOCATION << " break in model continuity, expected: " << write_offset
                            << ", got: " << segment->computed_offset << std::endl;);
             }
-            switch (get_model_segment_kind_(segment.get())) {
+            switch (omega_model_segment_get_kind(segment.get())) {
                 case model_segment_kind_t::SEGMENT_READ: {
                     if (!session_ptr->file_ptr) {
                         ABORT(CLOG << LOCATION << " attempt to read segment from null file pointer" << std::endl;);
@@ -394,60 +397,24 @@ int omega_edit_save(const omega_session_t *session_ptr, const char *file_path) {
     return -1;
 }
 
-// Manage a raw const pointer with custom deleter
-template<typename T>
-using deleted_unique_const_ptr = std::unique_ptr<const T, std::function<void(const T *)>>;
-
-/*
- * The idea here is to search using tiled windows.  The window should be at least twice the size of the pattern, and
- * then it skips to 1 + window_capacity - needle_length, as far as we can skip, with just enough backward coverage to
- * catch patterns that were on the window boundary.
- */
-int omega_edit_search_bytes(const omega_session_t *session_ptr, const omega_byte_t *pattern,
-                            omega_edit_match_found_cbk_t cbk, void *user_data, int64_t pattern_length,
-                            int64_t session_offset, int64_t session_length) {
-    int rc = -1;
-    pattern_length =
-            (pattern_length) ? pattern_length : static_cast<int64_t>(strlen(reinterpret_cast<const char *>(pattern)));
-    if (pattern_length < OMEGA_SEARCH_PATTERN_LENGTH_LIMIT) {
-        rc = 0;
-        session_length =
-                (session_length) ? session_length : omega_session_get_computed_file_size(session_ptr) - session_offset;
-        if (pattern_length <= session_length) {
-            data_segment_t data_segment;
-            data_segment.offset = session_offset;
-            data_segment.capacity = OMEGA_SEARCH_PATTERN_LENGTH_LIMIT << 1;
-            data_segment.data.bytes_ptr =
-                    (7 < data_segment.capacity) ? std::make_unique<omega_byte_t[]>(data_segment.capacity) : nullptr;
-            const auto skip_size = 1 + data_segment.capacity - pattern_length;
-            int64_t skip = 0;
-            const auto skip_table_ptr = deleted_unique_const_ptr<skip_table_t>(
-                    create_skip_table(pattern, pattern_length), destroy_skip_table);
-            do {
-                data_segment.offset += skip;
-                populate_data_segment_(session_ptr, &data_segment);
-                auto haystack = get_data_segment_data_(&data_segment);
-                auto haystack_length = data_segment.length;
-                const omega_byte_t *found;
-                int64_t delta = 0;
-                while ((found = string_search(haystack + delta, haystack_length - delta, skip_table_ptr.get(), pattern,
-                                              pattern_length))) {
-                    delta = found - haystack;
-                    if ((rc = cbk(data_segment.offset + delta, pattern_length, user_data)) != 0) { return rc; }
-                    ++delta;
-                }
-                skip = skip_size;
-            } while (data_segment.length == data_segment.capacity);
-            if (7 < data_segment.capacity) { data_segment.data.bytes_ptr.reset(); }
-        }
+int omega_edit_clear_changes(omega_session_t *session_ptr) {
+    int64_t length = 0;
+    if (session_ptr->file_ptr) {
+        if (0 != fseeko(session_ptr->file_ptr, 0L, SEEK_END)) { return -1; }
+        length = ftello(session_ptr->file_ptr);
     }
-    return rc;
+    initialize_model_segments_(session_ptr->model_ptr_->model_segments, length);
+    session_ptr->model_ptr_->changes.clear();
+    for (const auto &viewport_ptr : session_ptr->viewports_) {
+        viewport_ptr->data_segment.capacity = -1 * std::abs(viewport_ptr->data_segment.capacity);// indicate dirty read
+        omega_viewport_execute_on_change(viewport_ptr.get(), nullptr);
+    }
+    return 0;
 }
 
 int64_t omega_edit_undo_last_change(omega_session_t *session_ptr) {
     if (!session_ptr->model_ptr_->changes.empty()) {
         const auto change_ptr = session_ptr->model_ptr_->changes.back();
-
         session_ptr->model_ptr_->changes.pop_back();
         int64_t length = 0;
         if (session_ptr->file_ptr) {
@@ -467,29 +434,16 @@ int64_t omega_edit_undo_last_change(omega_session_t *session_ptr) {
         session_ptr->model_ptr_->changes_undone.push_back(change_ptr);
         update_viewports_(session_ptr, undone_change_ptr);
         if (session_ptr->on_change_cbk) { session_ptr->on_change_cbk(session_ptr, undone_change_ptr); }
-        return undone_change_ptr->serial * -1;
+        return undone_change_ptr->serial;
     }
-    return -1;
+    return 0;
 }
 
 int64_t omega_edit_redo_last_undo(omega_session_t *session_ptr) {
-    int64_t rc = -1;
+    int64_t rc = 0;
     if (!session_ptr->model_ptr_->changes_undone.empty()) {
         rc = update_(session_ptr, session_ptr->model_ptr_->changes_undone.back());
         session_ptr->model_ptr_->changes_undone.pop_back();
     }
     return rc;
-}
-
-int omega_edit_check_model(const omega_session_t *session_ptr) {
-    int64_t expected_offset = 0;
-    for (const auto &segment : session_ptr->model_ptr_->model_segments) {
-        if (expected_offset != segment->computed_offset ||
-            (segment->change_offset + segment->computed_length) > segment->change_ptr->length) {
-            print_model_segments_(session_ptr->model_ptr_.get(), CLOG);
-            return -1;
-        }
-        expected_offset += segment->computed_length;
-    }
-    return 0;
 }

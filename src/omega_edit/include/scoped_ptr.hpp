@@ -14,23 +14,21 @@
  * limitations under the License.                                                                                     *
  **********************************************************************************************************************/
 
-#ifndef OMEGA_EDIT_INTERNAL_FUN_H
-#define OMEGA_EDIT_INTERNAL_FUN_H
+#ifndef OMEGA_EDIT_SCOPED_PTR_H
+#define OMEGA_EDIT_SCOPED_PTR_H
 
-#include "../../include/byte.h"
-#include "../../include/fwd_defs.h"
-#include "internal_fwd_defs.h"
-#include <iosfwd>
+#ifdef __cplusplus
 
-// Data segment functions
-omega_byte_t *get_data_segment_data_(data_segment_t *data_segment_ptr);
-int populate_data_segment_(const omega_session_t *session_ptr, data_segment_t *data_segment_ptr);
+#include <functional>
+#include <memory>
 
-// Model segment functions
-void print_model_segments_(const omega_model_t *model_ptr, std::ostream &out_stream);
-model_segment_kind_t get_model_segment_kind_(const model_segment_t *model_segment_ptr);
+/**
+ * Scoped smart pointer with custom delete function suitable for managing omega edit pointers that are eligible for
+ * destruction
+ */
+template<typename T>
+using omega_scoped_ptr = std::unique_ptr<T, std::function<void(T *)>>;
 
-// Viewport functions
-void viewport_callback_(omega_viewport_t *viewport_ptr, const omega_change_t *change_ptr);
+#endif//__cplusplus
 
-#endif//OMEGA_EDIT_INTERNAL_FUN_H
+#endif//OMEGA_EDIT_SCOPED_PTR_H

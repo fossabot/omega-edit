@@ -12,54 +12,34 @@
  *                                                                                                                    *
  **********************************************************************************************************************/
 
-#include "../include/encodings.h"
-#include <assert.h>
+#ifndef OMEGA_EDIT_MODEL_SEGMENT_DEF_HPP
+#define OMEGA_EDIT_MODEL_SEGMENT_DEF_HPP
 
-size_t omega_bin2hex(const omega_byte_t *src, char *dst, size_t src_length) {
-    assert(src);
-    assert(dst);
-    static const char HEX_CONVERSION_TABLE[] = "0123456789abcdef";
-    size_t j = 0;
+#include "../../include/change.h"
+#include "internal_fwd_defs.hpp"
 
-    for (size_t i = 0; i < src_length; ++i) {
-        dst[j++] = HEX_CONVERSION_TABLE[src[i] >> 4];
-        dst[j++] = HEX_CONVERSION_TABLE[src[i] & 15];
-    }
-    dst[j] = '\0';
-    return j;
+enum class model_segment_kind_t { SEGMENT_READ, SEGMENT_INSERT };
+
+struct omega_model_segment_struct {
+    int64_t computed_offset{};            ///< Computed offset can differ from the change as segments move and split
+    int64_t computed_length{};            ///< Computed length can differ from the change as segments split
+    int64_t change_offset{};              ///< Change offset is the offset in the change due to a split
+    const_omega_change_ptr_t change_ptr{};///< Reference to parent change
+};
+
+inline model_segment_kind_t omega_model_segment_get_kind(const omega_model_segment_t *model_segment_ptr) {
+    return (0 == omega_change_get_serial(model_segment_ptr->change_ptr.get())) ? model_segment_kind_t::SEGMENT_READ
+                                                                               : model_segment_kind_t::SEGMENT_INSERT;
 }
 
-size_t omega_hex2bin(const char *src, omega_byte_t *dst, size_t src_length) {
-    assert(src);
-    assert(dst);
-    const size_t dst_length = src_length >> 1;
-    size_t i = 0, j = 0;
-
-    while (i < dst_length) {
-        omega_byte_t c = src[j++], d;
-
-        if (c >= '0' && c <= '9') {
-            d = (c - '0') << 4;
-        } else if (c >= 'a' && c <= 'f') {
-            d = (c - 'a' + 10) << 4;
-        } else if (c >= 'A' && c <= 'F') {
-            d = (c - 'A' + 10) << 4;
-        } else {
-            return 0;
-        }
-        c = src[j++];
-
-        if (c >= '0' && c <= '9') {
-            d |= c - '0';
-        } else if (c >= 'a' && c <= 'f') {
-            d |= c - 'a' + 10;
-        } else if (c >= 'A' && c <= 'F') {
-            d |= c - 'A' + 10;
-        } else {
-            return 0;
-        }
-        dst[i++] = d;
+inline char omega_model_segment_kind_as_char(const model_segment_kind_t segment_kind) {
+    switch (segment_kind) {
+        case model_segment_kind_t::SEGMENT_READ:
+            return 'R';
+        case model_segment_kind_t::SEGMENT_INSERT:
+            return 'I';
     }
-    dst[i] = '\0';
-    return i;
+    return '?';
 }
+
+#endif//OMEGA_EDIT_MODEL_SEGMENT_DEF_HPP

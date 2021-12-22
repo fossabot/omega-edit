@@ -12,54 +12,18 @@
  *                                                                                                                    *
  **********************************************************************************************************************/
 
-#include "../include/encodings.h"
-#include <assert.h>
+#ifndef OMEGA_EDIT_INTERNAL_FUN_HPP
+#define OMEGA_EDIT_INTERNAL_FUN_HPP
 
-size_t omega_bin2hex(const omega_byte_t *src, char *dst, size_t src_length) {
-    assert(src);
-    assert(dst);
-    static const char HEX_CONVERSION_TABLE[] = "0123456789abcdef";
-    size_t j = 0;
+#include "../../include/byte.h"
+#include "../../include/fwd_defs.h"
+#include "internal_fwd_defs.hpp"
+#include <iosfwd>
 
-    for (size_t i = 0; i < src_length; ++i) {
-        dst[j++] = HEX_CONVERSION_TABLE[src[i] >> 4];
-        dst[j++] = HEX_CONVERSION_TABLE[src[i] & 15];
-    }
-    dst[j] = '\0';
-    return j;
-}
+// Data segment functions
+int populate_data_segment_(const omega_session_t *session_ptr, omega_data_segment_t *data_segment_ptr);
 
-size_t omega_hex2bin(const char *src, omega_byte_t *dst, size_t src_length) {
-    assert(src);
-    assert(dst);
-    const size_t dst_length = src_length >> 1;
-    size_t i = 0, j = 0;
+// Model segment functions
+void print_model_segments_(const omega_model_t *model_ptr, std::ostream &out_stream);
 
-    while (i < dst_length) {
-        omega_byte_t c = src[j++], d;
-
-        if (c >= '0' && c <= '9') {
-            d = (c - '0') << 4;
-        } else if (c >= 'a' && c <= 'f') {
-            d = (c - 'a' + 10) << 4;
-        } else if (c >= 'A' && c <= 'F') {
-            d = (c - 'A' + 10) << 4;
-        } else {
-            return 0;
-        }
-        c = src[j++];
-
-        if (c >= '0' && c <= '9') {
-            d |= c - '0';
-        } else if (c >= 'a' && c <= 'f') {
-            d |= c - 'a' + 10;
-        } else if (c >= 'A' && c <= 'F') {
-            d |= c - 'A' + 10;
-        } else {
-            return 0;
-        }
-        dst[i++] = d;
-    }
-    dst[i] = '\0';
-    return i;
-}
+#endif//OMEGA_EDIT_INTERNAL_FUN_HPP

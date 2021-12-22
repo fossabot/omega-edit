@@ -1,19 +1,18 @@
 /**********************************************************************************************************************
  * Copyright (c) 2021 Concurrent Technologies Corporation.                                                            *
  *                                                                                                                    *
- * Licensed under the Apache License, Version 2.0 (the "License");                                                    *
- * you may not use this file except in compliance with the License.                                                   *
- * You may obtain a copy of the License at                                                                            *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance     *
+ * with the License.  You may obtain a copy of the License at                                                         *
  *                                                                                                                    *
  *     http://www.apache.org/licenses/LICENSE-2.0                                                                     *
  *                                                                                                                    *
- * Unless required by applicable law or agreed to in writing, software                                                *
- * distributed under the License is distributed on an "AS IS" BASIS,                                                  *
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                                           *
- * See the License for the specific language governing permissions and                                                *
- * limitations under the License.                                                                                     *
+ * Unless required by applicable law or agreed to in writing, software is distributed under the License is            *
+ * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or                   *
+ * implied.  See the License for the specific language governing permissions and limitations under the License.       *
+ *                                                                                                                    *
  **********************************************************************************************************************/
 
+#include "../omega_edit/include/stl_string_adaptor.hpp"
 #include "../omega_edit/omega_edit.h"
 #include <iomanip>
 #include <iostream>
@@ -58,7 +57,7 @@ void vpt_change_cbk(const omega_viewport_t *viewport_ptr, const omega_change_t *
                 write_pretty_bits(omega_viewport_get_data(viewport_ptr), omega_viewport_get_length(viewport_ptr));
                 break;
             case CHAR_MODE:
-                clog << string((const char *) omega_viewport_get_data(viewport_ptr), omega_viewport_get_length(viewport_ptr));
+                clog << omega_viewport_get_string(viewport_ptr);
                 break;
             default:// flow through
             case BYTE_MODE:
@@ -69,7 +68,7 @@ void vpt_change_cbk(const omega_viewport_t *viewport_ptr, const omega_change_t *
 }
 
 inline display_mode_t char_to_display_mode(char c) {
-    switch(c) {
+    switch (c) {
         case 'b':
             return display_mode_t::BIT_MODE;
         case 'c':
@@ -81,16 +80,14 @@ inline display_mode_t char_to_display_mode(char c) {
 
 int main(int argc, char **argv) {
     if (argc != 5) {
-        fprintf(stderr,
-                "This program displays a slice from the infile using an Omega Edit viewport.  The display modes are\n"
-                "'c' for character mode, 'b' for bit mode, and 'B' for byte mode\n\n"
-                "USAGE: %s display_mode infile offset length\n",
-                argv[0]);
+        cerr << "This program displays a slice from the infile using an Omega Edit viewport.  The display modes are "
+                "'c' for character mode, 'b' for bit mode, and 'B' for byte mode\n\nUSAGE: "
+             << argv[0] << " display_mode infile offset length" << endl;
         return -1;
     }
-    auto in_filename = argv[2];
-    auto offset = stoll(argv[3]);
-    auto length = stoll(argv[4]);
+    const auto in_filename = argv[2];
+    const auto offset = stoll(argv[3]);
+    const auto length = stoll(argv[4]);
     view_mode_t view_mode;
     view_mode.display_mode = char_to_display_mode(argv[1][0]);
     auto session_ptr = omega_edit_create_session(in_filename, nullptr, nullptr);
@@ -98,8 +95,9 @@ int main(int argc, char **argv) {
         omega_edit_create_viewport(session_ptr, offset, length, vpt_change_cbk, &view_mode);
         omega_edit_destroy_session(session_ptr);
     } else {
-        fprintf(stderr, "failed to create session, probably because the offset and/or length are out of range for the\n"
-                        "given input file\n");
+        cerr << "failed to create session, probably because the offset and/or length are out of range for the given "
+                "input file"
+             << endl;
     }
     return 0;
 }

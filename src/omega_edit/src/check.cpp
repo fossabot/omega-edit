@@ -12,54 +12,26 @@
  *                                                                                                                    *
  **********************************************************************************************************************/
 
-#include "../include/encodings.h"
-#include <assert.h>
+#include "../include/check.h"
+#include "impl_/change_def.hpp"
+#include "impl_/internal_fun.hpp"
+#include "impl_/macros.hpp"
+#include "impl_/model_def.hpp"
+#include "impl_/session_def.hpp"
+#include <cassert>
 
-size_t omega_bin2hex(const omega_byte_t *src, char *dst, size_t src_length) {
-    assert(src);
-    assert(dst);
-    static const char HEX_CONVERSION_TABLE[] = "0123456789abcdef";
-    size_t j = 0;
-
-    for (size_t i = 0; i < src_length; ++i) {
-        dst[j++] = HEX_CONVERSION_TABLE[src[i] >> 4];
-        dst[j++] = HEX_CONVERSION_TABLE[src[i] & 15];
-    }
-    dst[j] = '\0';
-    return j;
-}
-
-size_t omega_hex2bin(const char *src, omega_byte_t *dst, size_t src_length) {
-    assert(src);
-    assert(dst);
-    const size_t dst_length = src_length >> 1;
-    size_t i = 0, j = 0;
-
-    while (i < dst_length) {
-        omega_byte_t c = src[j++], d;
-
-        if (c >= '0' && c <= '9') {
-            d = (c - '0') << 4;
-        } else if (c >= 'a' && c <= 'f') {
-            d = (c - 'a' + 10) << 4;
-        } else if (c >= 'A' && c <= 'F') {
-            d = (c - 'A' + 10) << 4;
-        } else {
-            return 0;
+int omega_check_model(const omega_session_t *session_ptr) {
+    assert(session_ptr);
+    assert(session_ptr->model_ptr_);
+    int64_t expected_offset = 0;
+    for (const auto &segment : session_ptr->model_ptr_->model_segments) {
+        assert(segment->change_ptr);
+        if (expected_offset != segment->computed_offset ||
+            (segment->change_offset + segment->computed_length) > segment->change_ptr->length) {
+            print_model_segments_(session_ptr->model_ptr_.get(), CLOG);
+            return -1;
         }
-        c = src[j++];
-
-        if (c >= '0' && c <= '9') {
-            d |= c - '0';
-        } else if (c >= 'a' && c <= 'f') {
-            d |= c - 'a' + 10;
-        } else if (c >= 'A' && c <= 'F') {
-            d |= c - 'A' + 10;
-        } else {
-            return 0;
-        }
-        dst[i++] = d;
+        expected_offset += segment->computed_length;
     }
-    dst[i] = '\0';
-    return i;
+    return 0;
 }

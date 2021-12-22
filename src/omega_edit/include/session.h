@@ -1,17 +1,15 @@
 /**********************************************************************************************************************
  * Copyright (c) 2021 Concurrent Technologies Corporation.                                                            *
  *                                                                                                                    *
- * Licensed under the Apache License, Version 2.0 (the "License");                                                    *
- * you may not use this file except in compliance with the License.                                                   *
- * You may obtain a copy of the License at                                                                            *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance     *
+ * with the License.  You may obtain a copy of the License at                                                         *
  *                                                                                                                    *
  *     http://www.apache.org/licenses/LICENSE-2.0                                                                     *
  *                                                                                                                    *
- * Unless required by applicable law or agreed to in writing, software                                                *
- * distributed under the License is distributed on an "AS IS" BASIS,                                                  *
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                                           *
- * See the License for the specific language governing permissions and                                                *
- * limitations under the License.                                                                                     *
+ * Unless required by applicable law or agreed to in writing, software is distributed under the License is            *
+ * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or                   *
+ * implied.  See the License for the specific language governing permissions and limitations under the License.       *
+ *                                                                                                                    *
  **********************************************************************************************************************/
 
 #ifndef OMEGA_EDIT_SESSION_H
@@ -28,10 +26,6 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 #endif
-
-/** Callback to implement for visiting changes in a session.
- * Return 0 to continue visiting changes and non-zero to stop.*/
-typedef int (*omega_session_change_visitor_cbk_t)(const omega_change_t *, void *);
 
 /**
  * Given a session, return the file path being edited (if known)
@@ -90,26 +84,30 @@ const omega_change_t *omega_session_get_last_change(const omega_session_t *sessi
 const omega_change_t *omega_session_get_last_undo(const omega_session_t *session_ptr);
 
 /**
- * Visit changes in the given session in chronological order (oldest first), if the callback returns an integer other
- * than 0, visitation will stop and the return value of the callback will be this function's return value
- * @param session_ptr session to visit changes in
- * @param cbk user-provided function to call for each change
- * @param user_data user-provided data to provide back to the callback
- * @return 0 if all changes were visited or the non-zero return value of the callback if visitation was stopped early
+ * Given a change serial, get the change
+ * @param change_serial change serial of the change to get
+ * @return change with the matching serial, or nullptr on failure
  */
-int omega_session_visit_changes(const omega_session_t *session_ptr, omega_session_change_visitor_cbk_t cbk,
-                                void *user_data);
+const omega_change_t *omega_session_get_change(const omega_session_t *session_ptr, int64_t change_serial);
 
 /**
- * Visit changes in the given session in reverse chronological order (newest first), if the callback returns an integer
- * other than 0, visitation will stop and the return value of the callback will be this function's return value
- * @param session_ptr session to visit changes in
- * @param cbk user-provided function to call for each change
- * @param user_data user-provided data to provide back to the callback
- * @return 0 if all changes were visited or the non-zero return value of the callback if visitation was stopped early
+ * Determine if the viewport on-change callbacks have been paused or not
+ * @param session_ptr session to determine if viewport on-change callbacks are paused on
+ * @return non-zero if viewport on-change callbacks are paused and zero if they are not
  */
-int omega_session_visit_changes_reverse(const omega_session_t *session_ptr, omega_session_change_visitor_cbk_t cbk,
-                                        void *user_data);
+int omega_session_viewport_on_change_callbacks_paused(const omega_session_t *session_ptr);
+
+/**
+ * Pause viewport on-change callbacks for the given session
+ * @param session_ptr session to pause viewport on-change callbacks on
+ */
+void omega_session_pause_viewport_on_change_callbacks(omega_session_t *session_ptr);
+
+/**
+ * Resume viewport on-change callbacks for the given session
+ * @param session_ptr session to resume viewport on-change callbacks on
+ */
+void omega_session_resume_viewport_on_change_callbacks(omega_session_t *session_ptr);
 
 #ifdef __cplusplus
 }

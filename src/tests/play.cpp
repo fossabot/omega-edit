@@ -1,17 +1,15 @@
 /**********************************************************************************************************************
  * Copyright (c) 2021 Concurrent Technologies Corporation.                                                            *
  *                                                                                                                    *
- * Licensed under the Apache License, Version 2.0 (the "License");                                                    *
- * you may not use this file except in compliance with the License.                                                   *
- * You may obtain a copy of the License at                                                                            *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance     *
+ * with the License.  You may obtain a copy of the License at                                                         *
  *                                                                                                                    *
  *     http://www.apache.org/licenses/LICENSE-2.0                                                                     *
  *                                                                                                                    *
- * Unless required by applicable law or agreed to in writing, software                                                *
- * distributed under the License is distributed on an "AS IS" BASIS,                                                  *
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.                                           *
- * See the License for the specific language governing permissions and                                                *
- * limitations under the License.                                                                                     *
+ * Unless required by applicable law or agreed to in writing, software is distributed under the License is            *
+ * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or                   *
+ * implied.  See the License for the specific language governing permissions and limitations under the License.       *
+ *                                                                                                                    *
  **********************************************************************************************************************/
 
 /*
@@ -19,7 +17,10 @@
  * saved to a file where they can be replayed.
  */
 
+#include "../omega_edit/include/check.h"
 #include "../omega_edit/include/encodings.h"
+#include "../omega_edit/include/scoped_ptr.hpp"
+#include "../omega_edit/include/stl_string_adaptor.hpp"
 #include "../omega_edit/omega_edit.h"
 #include <cassert>
 #include <cinttypes>
@@ -55,7 +56,8 @@ int save_changes_cbk(const omega_change_t *change_ptr, void *userdata) {
         default:
             abort();
     }
-    assert(file_info_ptr->deletes + file_info_ptr->inserts + file_info_ptr->overwrites == omega_change_get_serial(change_ptr));
+    assert(file_info_ptr->deletes + file_info_ptr->inserts + file_info_ptr->overwrites ==
+           omega_change_get_serial(change_ptr));
     // NOTE: This is for demonstration purposes only.  This is not a production-quality format.
     const auto bytes = omega_change_get_bytes(change_ptr);
     const auto bytes_length = omega_change_get_length(change_ptr);
@@ -82,7 +84,7 @@ void session_change_cbk(const omega_session_t *session_ptr, const omega_change_t
     auto file_info_ptr = (file_info_t *) omega_session_get_user_data(session_ptr);
     file_info_ptr->deletes = file_info_ptr->inserts = file_info_ptr->overwrites = 0;
     file_info_ptr->save_fptr = fopen(file_info_ptr->save_filename, "w");
-    omega_session_visit_changes(session_ptr, save_changes_cbk, file_info_ptr);
+    omega_visit_changes(session_ptr, save_changes_cbk, file_info_ptr);
     fclose(file_info_ptr->save_fptr);
 }
 
@@ -121,8 +123,7 @@ void vpt_change_cbk(const omega_viewport_t *viewport_ptr, const omega_change_t *
         clog << "Change serial: " << omega_change_get_serial(change_ptr)
              << ", kind: " << omega_change_get_kind_as_char(change_ptr)
              << ", offset: " << omega_change_get_offset(change_ptr)
-             << ", length: " << omega_change_get_length(change_ptr)
-             << endl;
+             << ", length: " << omega_change_get_length(change_ptr) << endl;
     }
     clog << " capacity: " << omega_viewport_get_capacity(viewport_ptr)
          << " length: " << omega_viewport_get_length(viewport_ptr)
@@ -153,7 +154,6 @@ void vpt_change_cbk(const omega_viewport_t *viewport_ptr, const omega_change_t *
 }
 
 int main(int /*argc*/, char ** /*argv*/) {
-    omega_session_t *session_ptr;
     file_info_t file_info;
     view_mode_t view_mode;
 
@@ -163,41 +163,43 @@ int main(int /*argc*/, char ** /*argv*/) {
     file_info.bin_to_hex_buffer_size = 1024;
     file_info.bin_to_hex_buffer = (char *) malloc(file_info.bin_to_hex_buffer_size);
 
-    session_ptr = omega_edit_create_session(file_info.in_filename, session_change_cbk, &file_info);
-    clog << "File Size: " << omega_session_get_computed_file_size(session_ptr) << endl;
-    auto viewport1_ptr = omega_edit_create_viewport(session_ptr, 0, 100, vpt_change_cbk, &view_mode);
-    omega_edit_delete(session_ptr, 0, omega_session_get_computed_file_size(session_ptr));
-    assert(1 == omega_change_get_serial(omega_session_get_last_change(session_ptr)));
-    if (0 != omega_edit_check_model(session_ptr)) { clog << __LINE__ << " session model has errors\n"; }
-    omega_edit_undo_last_change(session_ptr);
-    omega_edit_insert_bytes(session_ptr, 0, (const omega_byte_t *) "++++");
-    omega_edit_overwrite_bytes(session_ptr, 5, (const omega_byte_t *) "-");
-    omega_edit_insert(session_ptr, 0, "++++");
-    if (0 != omega_edit_check_model(session_ptr)) { clog << __LINE__ << " session model has errors\n"; }
-    auto viewport2_ptr = omega_edit_create_viewport(session_ptr, 50, 10, vpt_change_cbk, &view_mode);
+    auto session_ptr = omega_scoped_ptr<omega_session_t>(
+            omega_edit_create_session(file_info.in_filename, session_change_cbk, &file_info),
+            omega_edit_destroy_session);
+    clog << "File Size: " << omega_session_get_computed_file_size(session_ptr.get()) << endl;
+    auto viewport1_ptr = omega_edit_create_viewport(session_ptr.get(), 0, 100, vpt_change_cbk, &view_mode);
+    omega_edit_delete(session_ptr.get(), 0, omega_session_get_computed_file_size(session_ptr.get()));
+    assert(1 == omega_change_get_serial(omega_session_get_last_change(session_ptr.get())));
+    if (0 != omega_check_model(session_ptr.get())) { clog << __LINE__ << " session model has errors\n"; }
+    omega_edit_undo_last_change(session_ptr.get());
+    omega_edit_insert_string(session_ptr.get(), 0, "++++");
+    omega_edit_overwrite_string(session_ptr.get(), 5, "-");
+    omega_edit_insert_string(session_ptr.get(), 0, "++++");
+    if (0 != omega_check_model(session_ptr.get())) { clog << __LINE__ << " session model has errors\n"; }
+    auto viewport2_ptr = omega_edit_create_viewport(session_ptr.get(), 50, 10, vpt_change_cbk, &view_mode);
     view_mode.display_mode = display_mode_t::BYTE_MODE;
-    omega_edit_insert(session_ptr, 71, "++++", 4);
-    omega_edit_overwrite(session_ptr, 10, ".");
+    omega_edit_insert(session_ptr.get(), 71, "++++", 4);
+    omega_edit_overwrite(session_ptr.get(), 10, ".", 0);
     view_mode.display_mode = display_mode_t::BIT_MODE;
-    omega_edit_overwrite(session_ptr, 0, "...", 3);
-    omega_edit_undo_last_change(session_ptr);
-    omega_edit_redo_last_undo(session_ptr);
-    omega_edit_overwrite(session_ptr, 74, ".");
-    omega_edit_insert(session_ptr, 70, "***");
-    omega_edit_delete(session_ptr, 70, 2);
+    omega_edit_overwrite(session_ptr.get(), 0, "...", 3);
+    omega_edit_undo_last_change(session_ptr.get());
+    omega_edit_redo_last_undo(session_ptr.get());
+    omega_edit_overwrite(session_ptr.get(), 74, ".", 0);
+    omega_edit_insert(session_ptr.get(), 70, "***", 0);
+    omega_edit_delete(session_ptr.get(), 70, 2);
     view_mode.display_mode = display_mode_t::CHAR_MODE;
-    omega_edit_insert_bytes(session_ptr, 10, (const omega_byte_t *) "++++");
-    omega_edit_overwrite_bytes(session_ptr, 12, (const omega_byte_t *) ".");
-    omega_edit_insert_bytes(session_ptr, 0, (const omega_byte_t *) "+++");
-    omega_edit_overwrite_bytes(session_ptr, 1, (const omega_byte_t *) ".");
-    omega_edit_overwrite_bytes(session_ptr, 77, (const omega_byte_t *) ".");
-    omega_edit_delete(session_ptr, 50, 3);
-    omega_edit_insert_bytes(session_ptr, 50, (const omega_byte_t *) "***", 3);
-    omega_edit_delete(session_ptr, 1, 50);
-    omega_edit_undo_last_change(session_ptr);
+    omega_edit_insert_string(session_ptr.get(), 10, "++++");
+    omega_edit_overwrite_bytes(session_ptr.get(), 12, (const omega_byte_t *) ".", 0);
+    omega_edit_insert_bytes(session_ptr.get(), 0, (const omega_byte_t *) "+++", 0);
+    omega_edit_overwrite_bytes(session_ptr.get(), 1, (const omega_byte_t *) ".", 0);
+    omega_edit_overwrite_bytes(session_ptr.get(), 77, (const omega_byte_t *) ".", 0);
+    omega_edit_delete(session_ptr.get(), 50, 3);
+    omega_edit_insert_bytes(session_ptr.get(), 50, (const omega_byte_t *) "***", 3);
+    omega_edit_delete(session_ptr.get(), 1, 50);
+    omega_edit_undo_last_change(session_ptr.get());
     omega_edit_destroy_viewport(viewport2_ptr);
-    omega_edit_delete(session_ptr, 0, omega_session_get_computed_file_size(session_ptr));
-    omega_edit_undo_last_change(session_ptr);
+    omega_edit_delete(session_ptr.get(), 0, omega_session_get_computed_file_size(session_ptr.get()));
+    omega_edit_undo_last_change(session_ptr.get());
 
     clog << "\n\nCycle through the display modes:\n";
     view_mode.display_mode = display_mode_t::CHAR_MODE;
@@ -207,11 +209,10 @@ int main(int /*argc*/, char ** /*argv*/) {
     view_mode.display_mode = display_mode_t::BIT_MODE;
     vpt_change_cbk(viewport1_ptr);
 
-    omega_edit_save(session_ptr, "data/test1.dat.out");
+    omega_edit_save(session_ptr.get(), "data/test1.dat.out");
     clog << "Saved " << file_info.deletes << " delete(s), " << file_info.inserts << " insert(s), "
          << file_info.overwrites << " overwrite(s) to " << file_info.save_filename << ", new file size: " << dec
-         << omega_session_get_computed_file_size(session_ptr) << endl;
-    omega_edit_destroy_session(session_ptr);
+         << omega_session_get_computed_file_size(session_ptr.get()) << endl;
     free(file_info.bin_to_hex_buffer);
     return 0;
 }

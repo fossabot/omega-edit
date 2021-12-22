@@ -12,54 +12,21 @@
  *                                                                                                                    *
  **********************************************************************************************************************/
 
-#include "../include/encodings.h"
-#include <assert.h>
+#include "../omega_edit/omega_edit.h"
+#include <stdio.h>
 
-size_t omega_bin2hex(const omega_byte_t *src, char *dst, size_t src_length) {
-    assert(src);
-    assert(dst);
-    static const char HEX_CONVERSION_TABLE[] = "0123456789abcdef";
-    size_t j = 0;
-
-    for (size_t i = 0; i < src_length; ++i) {
-        dst[j++] = HEX_CONVERSION_TABLE[src[i] >> 4];
-        dst[j++] = HEX_CONVERSION_TABLE[src[i] & 15];
-    }
-    dst[j] = '\0';
-    return j;
+void vpt_change_cbk(const omega_viewport_t *viewport_ptr, const omega_change_t *change_ptr) {
+    char change_kind = (change_ptr) ? omega_change_get_kind_as_char(change_ptr) : 'R';
+    fprintf(stdout, "%c: [%s]\n", change_kind, omega_viewport_get_data(viewport_ptr));
 }
 
-size_t omega_hex2bin(const char *src, omega_byte_t *dst, size_t src_length) {
-    assert(src);
-    assert(dst);
-    const size_t dst_length = src_length >> 1;
-    size_t i = 0, j = 0;
-
-    while (i < dst_length) {
-        omega_byte_t c = src[j++], d;
-
-        if (c >= '0' && c <= '9') {
-            d = (c - '0') << 4;
-        } else if (c >= 'a' && c <= 'f') {
-            d = (c - 'a' + 10) << 4;
-        } else if (c >= 'A' && c <= 'F') {
-            d = (c - 'A' + 10) << 4;
-        } else {
-            return 0;
-        }
-        c = src[j++];
-
-        if (c >= '0' && c <= '9') {
-            d |= c - '0';
-        } else if (c >= 'a' && c <= 'f') {
-            d |= c - 'a' + 10;
-        } else if (c >= 'A' && c <= 'F') {
-            d |= c - 'A' + 10;
-        } else {
-            return 0;
-        }
-        dst[i++] = d;
-    }
-    dst[i] = '\0';
-    return i;
+int main() {
+    omega_session_t *session_ptr = omega_edit_create_session(NULL, NULL, NULL);
+    omega_edit_create_viewport(session_ptr, 0, 100, vpt_change_cbk, NULL);
+    omega_edit_insert(session_ptr, 0, "Hello Weird!!!!", 0);
+    omega_edit_overwrite(session_ptr, 7, "orl", 0);
+    omega_edit_delete(session_ptr, 11, 3);
+    omega_edit_save(session_ptr, "hello.txt");
+    omega_edit_destroy_session(session_ptr);
+    return 0;
 }
